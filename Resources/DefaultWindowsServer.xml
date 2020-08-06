@@ -1,0 +1,28 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<SbRoleOptions>
+  <Role>
+    <SbRole>
+      <Id>34879a50-0885-4943-8123-f30567633409</Id>
+      <Name>PowerShell Script</Name>
+    </SbRole>
+  </Role>
+  <Options>
+    <SbVerificationOptions>
+      <ActualMemoryPercent>50</ActualMemoryPercent>
+      <MaxBootTimeoutSec>1200</MaxBootTimeoutSec>
+      <AppInitDelaySec>120</AppInitDelaySec>
+      <TestScripts>
+        <TestScripts>
+          <TestScript>
+            <Name>PowerShell Script</Name>
+            <Type>Predefined</Type>
+            <TestScriptFilePath>PowerShell.exe</TestScriptFilePath>
+            <Arguments>C:\vLabFiles\Test-Service.ps1 %vm_fqdn% dhcp</Arguments>
+          </TestScript>
+        </TestScripts>
+      </TestScripts>
+      <HeartbeatEnabled>True</HeartbeatEnabled>
+      <PingEnabled>True</PingEnabled>
+    </SbVerificationOptions>
+  </Options>
+</SbRoleOptions>
