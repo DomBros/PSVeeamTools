@@ -1,5 +1,5 @@
 ﻿Function Get-VTvLabNameByVM {
-    
+
     [CmdletBinding(PositionalBinding = $false)]
     [OutputType([System.String])]
     Param (
@@ -22,19 +22,19 @@
         [Parameter()]
         [System.String]$vLabNameVMwareDefault = $Script:VTConfig.vLabNameVMwareDefault
     )
-    
+
     $ProcessName = $MyInvocation.MyCommand.Name
     $Log = $Script:VTConfig.LogFile
     $LogError = $Script:VTConfig.LogFileError
-    
+
     Try {
-        
+
         $Msg = "VMvLan: $VMvLan"
         "[$ProcessName] [$((Get-Date).ToString())] [Info] $Msg" | Out-File -FilePath $Log -Append
         Write-Verbose -Message $Msg
-        
+
         $VirtualLabNameByVM = $VirtualLabName = $VirtualLabNameBySureJobAll = $null
-        
+
         If (-not $VirtualLabName) {
             If ($PSBoundParameters.ContainsKey('BackupJobName')) {
                 $VirtualLabNameBySureJobAll = $Script:VTConfig.vLabParameters | Where-Object {
@@ -43,8 +43,8 @@
                 If ($VirtualLabNameBySureJobAll) {
                     If ($PSBoundParameters.ContainsKey('VMvLan') -and $VirtualLabNameBySureJobAll.vLan) {
                         $VirtualLabNameBySureJob = $VirtualLabNameBySureJobAll | Where-Object {
-                                $PSItem.vLan -contains $VMvLan
-                            }
+                            $PSItem.vLan -contains $VMvLan
+                        }
                         $VirtualLabName = $VirtualLabNameBySureJob.vLabName
                     } Else {
                         $VirtualLabName = $VirtualLabNameBySureJobAll.vLabName
@@ -52,7 +52,7 @@
                 }
             }
         }
-        
+
         If (-not $VirtualLabName) {
             If ($PSBoundParameters.ContainsKey('VMName')) {
                 $VirtualLabNameByVM = $Script:VTConfig.vLabParameters | Where-Object {
@@ -63,12 +63,12 @@
                 }
             }
         }
-        
+
         If (-not $VirtualLabName) {
             If ($VMType -eq 'Hv' -and $PSBoundParameters.ContainsKey('VMvLan')) {
                 If ($VirtualLabNameByVlan = $Script:VTConfig.vLabParameters | Where-Object {
-                            $PSItem.vLan -contains $VMvLan -and -not $PSItem.BackupJobName
-                        }) {
+                        $PSItem.vLan -contains $VMvLan -and -not $PSItem.BackupJobName
+                    }) {
                     $VirtualLabName = $VirtualLabNameByVlan.vLabName
                 } Else {
                     $VirtualLabName = $vLabNameHyperVDefault
@@ -80,9 +80,8 @@
                 Throw $errMsg
             }
         }
-        
+
         $VirtualLabName
-        
     } Catch {
         Get-Date | Out-File -FilePath $LogError -Append
         $_ | Out-File -FilePath $LogError -Append

@@ -1,39 +1,38 @@
 ﻿Function Set-VTConnection {
-    
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '')]
     [CmdletBinding(PositionalBinding = $false)]
     [OutputType([System.Void])]
     Param (
-        #VbrServer
+        # PSCredential
+        [Parameter()]
+        [System.Management.Automation.PSCredential]$CredentialVeeam,
+        # VbrServer
         [Parameter()]
         [String]$VbrServer = $Script:VTConfig.VBRServer
     )
-    
+
     $needToConnect = $false
     $ProcessName = $MyInvocation.MyCommand.Name
     $Log = $Script:VTConfig.LogFile
     $LogError = $Script:VTConfig.LogFileError
-    
+
     Try {
         #region Connect
-        If (-not (Get-command Connect-VBRServer -ErrorAction Ignore)) {
-            # Load Veeam Snapin
-            $Msg = 'Cmdlet Connect-VBRServer not available'
+        If (-not (Get-Module -Name Veeam.Backup.PowerShell)) {
+            # Load Veeam module
+            $Msg = 'Module "Veeam.Backup.PowerShell" not loaded'
             "[$ProcessName] [$((Get-Date).ToString())] [Info] $Msg" | Out-File -FilePath $Log -Append
             Write-Verbose -Message $Msg
-            If (-not (Get-PSSnapin -Name VeeamPSSnapIn -ErrorAction SilentlyContinue)) {
-                If (-not (Add-PSSnapin -PassThru -Name VeeamPSSnapIn)) {
-                    Write-Error -Message 'Unable to load Veeam snapin'
-                }
-            }
-            # Connect to VBR server
+
+            Import-Module -Name Veeam.Backup.PowerShell
         } Else {
-            $Msg = 'Cmdlet Connect-VBRServer available'
+            $Msg = 'Module "Veeam.Backup.PowerShell" loaded'
             "[$ProcessName] [$((Get-Date).ToString())] [Info] $Msg" | Out-File -FilePath $Log -Append
             Write-Verbose -Message $Msg
         }
-        
+
         $VBRServerSession = Get-VBRServerSession
-        
+
         If (-not $VBRServerSession) {
             $Msg = 'Not connected to any VBR server'
             "[$ProcessName] [$((Get-Date).ToString())] [Info] $Msg" | Out-File -FilePath $Log -Append
@@ -52,10 +51,14 @@
                 $needToConnect = $true
             }
         }
-        
+
         If ($needToConnect) {
             Try {
-                Connect-VBRServer -Server $VbrServer -ErrorAction Stop
+                if ($PSBoundParameters.ContainsKey('CredentialVeeam')) {
+                    Connect-VBRServer -Server $VbrServer -Credential $CredentialVeeam -ErrorAction Stop
+                } else {
+                    Connect-VBRServer -Server $VbrServer -ErrorAction Stop
+                }
             } Catch {
                 $Msg = "Unable to connect to VBR server - $VbrServer"
                 "[$ProcessName] [$((Get-Date).ToString())] [Info] $Msg" | Out-File -FilePath $LogError -Append

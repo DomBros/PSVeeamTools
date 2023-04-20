@@ -3,6 +3,7 @@
     [CmdletBinding(PositionalBinding = $false)]
     [OutputType([System.Void])]
     Param (
+
     )
 
     $ProcessName = $MyInvocation.MyCommand.Name
@@ -13,10 +14,12 @@
         $Msg = 'Start'
         "[$ProcessName] [$((Get-Date).ToString())] [Info] $Msg" | Out-File -FilePath $Log -Append
 
-        Set-VTConnection
+        #Set-VTConnection
 
         #region report
-        $VsbJobs = Get-VSBJob | Where-Object -FilterScript {
+        #$VsbJobsAll = [Veeam.Backup.Core.SureBackup.CSbJob]::GetAll()
+        $VsbJobsAll = Get-VBRSureBackupJob
+        $VsbJobs = $VsbJobsAll | Where-Object -FilterScript {
             $_.Name -like "$($Script:VTConfig.SureJobNamePrefix) (*"
         } | Sort-Object -Property Name
 
@@ -70,7 +73,7 @@ RunBy: $env:USERNAME.<br>
             Subject    = $Subject
             From       = $From
             To         = $To
-            SmtpServer = 'mailserver.test.co.uk'
+            SmtpServer = $Script:VTConfig.MailServer
             Body       = $HtmlFragment
             BodyAsHtml = $true
             Encoding   = 'UTF8'
@@ -78,7 +81,6 @@ RunBy: $env:USERNAME.<br>
 
         Send-MailMessage @messageParameters
         #endregion report
-
     } Catch {
         Get-Date | Out-File -FilePath $LogError -Append
         $_ | Out-File -FilePath $LogError -Append

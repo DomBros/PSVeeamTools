@@ -1,11 +1,14 @@
 ﻿Function New-VTApplicationGroupSureBackupJob {
-
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '')]
     [CmdletBinding(PositionalBinding = $false)]
     [OutputType([PSCustomObject])]
     Param (
         #BackupOlderThenHrs
         [Parameter()]
-        [System.Int32]$BackupOlderThenHrs = $Script:VTConfig.SearchFormVMinBackupNotOlderThanHours
+        [System.Int32]$BackupOlderThenHrs = $Script:VTConfig.SearchFormVMinBackupNotOlderThanHours,
+        # PSCredential
+        [Parameter()]
+        [System.Management.Automation.PSCredential]$CredentialHyperV
     )
 
     $CurrentSureBackupJobs = $null
@@ -15,11 +18,10 @@
     $LogError = $Script:VTConfig.LogFileError
     $SureJobNamePrefix = $Script:VTConfig.SureJobNamePrefix
     $BackupJobExcluded = $Script:VTConfig.ExcludeBackupJob
-    $DefaultVMvLan = $Script:VTConfig.DefaultVMvLan
     $BackupOlderThen = (Get-Date).AddHours(-$BackupOlderThenHrs)
 
     Try {
-        Set-VTConnection
+        #Set-VTConnection
 
         $Msg = 'Getting VBR backup sessions'
         Write-Verbose -Message $Msg
@@ -29,6 +31,9 @@
         $VBRJob = Get-VBRJob | Where-Object -FilterScript {
             $PSItem.JobType -eq 'Backup'
         }
+
+        # TODO
+        #Get-VBRComputerBackupJob
 
         $VBRJobName = $VBRJob.Name
 
@@ -53,7 +58,7 @@
         $VMsNumber = ($VMsList | Measure-Object).Count
 
         #Current Jobs list
-        #Get-VSBJob = Get-VBRSureBackupJob
+        #Get-VSBJob = Get-VBRSureBackupJob = [Veeam.Backup.Core.SureBackup.CSbJob]::GetAll()
         If ($CurrentSureBackupJobsAll = Get-VBRSureBackupJob) {
             $CurrentSureBackupJobs = $CurrentSureBackupJobsAll | Where-Object -FilterScript {
                 $PSItem.Name -like "$SureJobNamePrefix (*"
@@ -67,7 +72,11 @@
             }
         }
 
-        $Script:VTVMsvLans = Get-VTVMvLan -Verbose
+        if ($PSBoundParameters.ContainsKey('CredentialHyperV')) {
+            $Script:VTVMsvLans = Get-VTVMvLan -CredentialHyperV $CredentialHyperV -Verbose
+        } else {
+            $Script:VTVMsvLans = Get-VTVMvLan -Verbose
+        }
 
         #region check test surebackup present if not remove and recreate them
         If ($CurrentSureBackupJobsCount -lt $VMsNumber) {
@@ -87,7 +96,7 @@
             $Msg = 'Getting VBRBackup'
             "[$ProcessName] [$((Get-Date).ToString())] [Info] $Msg" | Out-File -FilePath $Log -Append
             Write-Verbose -Message $Msg
-            $VBRBackupAll = (Get-VBRBackup).Where({
+            $VBRBackupAll = (Get-VBRBackup).Where( {
                     $PSItem.JobType -eq 'Backup'
                 })
 
@@ -97,8 +106,8 @@
 
             $VBRRestorePointAll = ForEach ($VBRBackup In $VBRBackupAll) {
                 @{
-                    JobName = $VBRBackup.JobName
-                    BackupPlatform = $VBRBackup.BackupPlatform
+                    JobName            = $VBRBackup.JobName
+                    BackupPlatform     = $VBRBackup.BackupPlatform
                     VBRRestorePointObj = $VBRBackup | Get-VBRRestorePoint
                 }
             }
@@ -121,6 +130,9 @@
                 If ($BackupJobName -in $BackupJobExcluded) {
                     Continue
                 }
+                If ($BackupJobName -like '*-Test') {
+                    Continue
+                }
 
                 If ($CurrentSureBackupJobs) {
                     If ($CurrentSureBackupJobs.Name -match $TestVM -and $CurrentSureBackupJobs.Description -eq $BackupJobName) {
@@ -132,7 +144,7 @@
                 }
 
                 $i++
-                $Proceed = $i/$VMsNumber
+                $Proceed = $i / $VMsNumber
                 $ProceedPercent = ($Proceed * 100)
                 If ($ProceedPercent -gt 100) {
                     $ProceedPercent = 100
@@ -147,7 +159,7 @@
                     $VMvLans = $VMvLansObject.vLan
                     $VMvLan = $VMvLans[0]
                 } Else {
-                    $VMvLan = $DefaultVMvLan
+                    $VMvLan = '3'
                 }
 
                 # Names and Descriptions
@@ -182,35 +194,33 @@
                     Write-Verbose -Message $Msg
                     $VirtualLabName = Get-VTvLabNameByVM -BackupJobName $BackupJobName -VMName $TestVM -VMvLan $VMvLan -VMType 'Hv'
 
-                    $VirtualLab = Get-VSBHvVirtualLab -Name $VirtualLabName
+                    $VirtualLabHV = Get-VSBHvVirtualLab -Name $VirtualLabName
                     #ToDo: Add-VSBHvApplicationGroup error if $AppGroupName exists
                     #$AppGroup = Add-VSBHvApplicationGroup -Name $AppGroupName -VmFromBackup $VmFromBackup
-                    $AppGroup = Add-VSBHvApplicationGroup -Name $AppGroupName -RestorePoint $restorePoint
-                    $VsbJob = Add-VSBHvJob -Name $SureBackupJobName -VirtualLab $VirtualLab -AppGroup $AppGroup -Description $SureBackupJobDescription
+                    $AppGroupHv = Add-VSBHvApplicationGroup -Name $AppGroupName -RestorePoint $restorePoint
+                    $null = Add-VSBHvJob -Name $SureBackupJobName -VirtualLab $VirtualLabHV -AppGroup $AppGroupHv -Description $SureBackupJobDescription
                 } ElseIf ($restorePointByJob.BackupPlatform.Platform -eq 'EVmware') {
 
                     $VirtualLabName = Get-VTvLabNameByVM -VMvLan $VMvLan -VMType 'Vi'
 
                     #$VmFromBackup = Find-VBRViEntity -Name $TestVM #, $VTConfig.VmNeededInApplicationGroup
-                    $VirtualLab = Get-VBRVirtualLab -Name $VirtualLabName
+                    $VirtualLabVi = Get-VBRVirtualLab -Name $VirtualLabName
                     #$AppGroup = Add-VSBViApplicationGroup -Name $AppGroupName -VmFromBackup $VmFromBackup
                     $startupoptions = New-VBRSureBackupStartupOptions -AllocatedMemory 50 -EnableVMHeartbeatCheck -MaximumBootTime 600 -ApplicationInitializationTimeout 120 -EnableVMPingCheck
                     $job = Get-VBRJob -Name $BackupJobName
-                    $backupobject = Get-VBRJobObject -Job $job Name $TestVM
+                    $backupobject = Get-VBRJobObject -Job $job -Name $TestVM
                     $vm = New-VBRSureBackupVM -VM $backupobject -StartupOptions $startupoptions
-                    $AppGroup = Add-VBRViApplicationGroup -Name $AppGroupName -VM $vm #-Description 'ESX'
-                    $VsbJob = Add-VBRViSureBackupJob -Name $SureBackupJobName -VirtualLab $VirtualLab -ApplicationGroup $AppGroup -Description $SureBackupJobDescription
+                    $AppGroupVi = Add-VBRViApplicationGroup -Name $AppGroupName -VM $vm #-Description 'ESX'
+                    $null = Add-VBRViSureBackupJob -Name $SureBackupJobName -VirtualLab $VirtualLabVi -ApplicationGroup $AppGroupVi -Description $SureBackupJobDescription
                 } Else {
                     $errMsg = "Cannot find VM in backup: $TestVM ($BackupJobName)"
                     "[$ProcessName] [$((Get-Date).ToString())] [Info] $Msg" | Out-File -FilePath $LogError -Append
                     Throw $errMsg
                 }
 
-                $SureBackupOptions = Get-VSBJob -Name $SureBackupJobName | Get-VSBJobOptions
-                $SureBackupOptions.EmailNotification = 'True'
-                $SureBackupOptions.EmailNotificationAddresses = $Script:VTConfig.MailTo
-                Get-VSBJob -Name $SureBackupJobName | Set-VSBJobOptions -Options $SureBackupOptions
-
+                $SureBackupOptionsObject = Get-VBRSureBackupJob -Name $SureBackupJobName
+                $SureBackupOptions = New-VBRSureBackupJobVerificationOptions -EnableEmailNotification -Address $($Script:VTConfig.MailTo) -NotifyOnError -NotifyOnWarning -NotifyOnSuccess:$false
+                $SureBackupOptionsObject | Set-VBRSureBackupJob -VerificationOptions $SureBackupOptions
             }
         }
         #endregion

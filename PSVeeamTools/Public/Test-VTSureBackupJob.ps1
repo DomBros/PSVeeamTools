@@ -6,6 +6,9 @@
         #VbrServer
         [Parameter(Mandatory)]
         [System.String]$VirtualLabName,
+        # PSCredential
+        [Parameter()]
+        [System.Management.Automation.PSCredential]$CredentialHyperV,
         #Loops
         [Parameter()]
         [System.Int32]$Tries = 2
@@ -24,16 +27,34 @@
 
         $Msg = "vLab:$VirtualLabName vLabID:$VirtualLabId"
         "[$ProcessName] [$((Get-Date).ToString())] [Info] $Msg" | Out-File -FilePath $Log -Append
-        Get-Info -Type i -Message $Msg | Out-File -FilePath $Log -Append
-        Write-Verbose -Message $Msg
+        Set-VTInfo -m $Msg
 
         #region present surebackup check
         $Msg = 'Listing jobs...'
         Write-Verbose -Message $Msg
         "[$ProcessName] [$((Get-Date).ToString())] [Info] $Msg" | Out-File -FilePath $Log -Append
-        $VsbJobs = Get-VSBJob | Where-Object -FilterScript {
+        #$VsbJobsAll = [Veeam.Backup.Core.SureBackup.CSbJob]::GetAll()
+        $VsbJobsAll = Get-VBRSureBackupJob
+        $VsbJobs = $VsbJobsAll | Where-Object -FilterScript {
             $_.VirtualLabId -eq $VirtualLabId
         } | Sort-Object -Property Name
+
+        $StateOff = @{
+            State   = 'Off'
+            Verbose = $true
+        }
+        $StateOn = @{
+            State   = 'On'
+            Verbose = $true
+        }
+        if ($PSBoundParameters.ContainsKey('CredentialHyperV')) {
+            $StateOff += @{
+                CredentialHyperV = $CredentialHyperV
+            }
+            $StateOn += @{
+                CredentialHyperV = $CredentialHyperV
+            }
+        }
 
         If ($VsbJobs) {
             ForEach ($VsbJob In $VsbJobs) {
@@ -54,9 +75,9 @@
                         Continue
                     }
 
-                    Set-VTDuplicateVMOnOff -Name $VsbJobName -vLabName $VirtualLabName -State 'Off' -Verbose
+                    Set-VTDuplicateVMOnOff -Name $VsbJobName -vLabName $VirtualLabName @StateOff
                     $VsbJob | Start-VSBJob -ErrorAction SilentlyContinue
-                    Set-VTDuplicateVMOnOff -Name $VsbJobName -vLabName $VirtualLabName -State 'On' -Verbose
+                    Set-VTDuplicateVMOnOff -Name $VsbJobName -vLabName $VirtualLabName @StateOn
                 }
             }
 
@@ -89,9 +110,9 @@
                             Continue
                         }
 
-                        Set-VTDuplicateVMOnOff -Name $VsbJobName -vLabName $VirtualLabName -State 'Off' -Verbose
+                        Set-VTDuplicateVMOnOff -Name $VsbJobName -vLabName $VirtualLabName @StateOff
                         $VsbJob | Start-VSBJob -ErrorAction SilentlyContinue
-                        Set-VTDuplicateVMOnOff -Name $VsbJobName -vLabName $VirtualLabName -State 'On' -Verbose
+                        Set-VTDuplicateVMOnOff -Name $VsbJobName -vLabName $VirtualLabName @StateOn
                     }
                 } While ($vsbOnHoldJobs -and ($i -lt $Tries))
             }
@@ -114,9 +135,9 @@
                     "[$ProcessName] [$((Get-Date).ToString())] [Info] $Msg" | Out-File -FilePath $Log -Append
                     Write-Verbose -Message $Msg
 
-                    Set-VTDuplicateVMOnOff -Name $VsbJobName -vLabName $VirtualLabName -State 'Off' -Verbose
+                    Set-VTDuplicateVMOnOff -Name $VsbJobName -vLabName $VirtualLabName @StateOff
                     $VsbJob | Start-VSBJob -ErrorAction SilentlyContinue
-                    Set-VTDuplicateVMOnOff -Name $VsbJobName -vLabName $VirtualLabName -State 'On' -Verbose
+                    Set-VTDuplicateVMOnOff -Name $VsbJobName -vLabName $VirtualLabName @StateOn
                 }
             }
             #endregion
@@ -150,9 +171,9 @@
                             Continue
                         }
 
-                        Set-VTDuplicateVMOnOff -Name $VsbJobName -vLabName $VirtualLabName -State 'Off' -Verbose
+                        Set-VTDuplicateVMOnOff -Name $VsbJobName -vLabName $VirtualLabName @StateOff
                         $VsbJob | Start-VSBJob -ErrorAction SilentlyContinue
-                        Set-VTDuplicateVMOnOff -Name $VsbJobName -vLabName $VirtualLabName -State 'On' -Verbose
+                        Set-VTDuplicateVMOnOff -Name $VsbJobName -vLabName $VirtualLabName @StateOn
                     }
                 } While ($vsbOnHoldJobs -and ($i -lt $Tries))
             }
@@ -165,7 +186,9 @@
                 $Msg = "Start jobs withWarning loop, i=$i"
                 "[$ProcessName] [$((Get-Date).ToString())] [Info] $Msg" | Out-File -FilePath $Log -Append
                 Write-Verbose -Message $Msg
-                $VsbJobs = Get-VSBJob | Where-Object -FilterScript {
+                #$VsbJobsAll = [Veeam.Backup.Core.SureBackup.CSbJob]::GetAll()
+                $VsbJobsAll = Get-VBRSureBackupJob
+                $VsbJobs = $VsbJobsAll | Where-Object -FilterScript {
                     $_.VirtualLabId -eq $VirtualLabId
                 } | Sort-Object -Property Name
 
@@ -186,12 +209,11 @@
                             Continue
                         }
 
-                        Set-VTDuplicateVMOnOff -Name $VsbJobName -vLabName $VirtualLabName -State 'Off' -Verbose
+                        Set-VTDuplicateVMOnOff -Name $VsbJobName -vLabName $VirtualLabName @StateOff
                         $VsbJob | Start-VSBJob -ErrorAction SilentlyContinue
-                        Set-VTDuplicateVMOnOff -Name $VsbJobName -vLabName $VirtualLabName -State 'On' -Verbose
+                        Set-VTDuplicateVMOnOff -Name $VsbJobName -vLabName $VirtualLabName @StateOn
                     }
                 }
-
             } While (($VsbJobs.GetLastResult() -contains 'Warning' -or $VsbJobs.GetLastResult() -contains 'Failed') -and ($i -lt $Tries))
             #endregion
 
@@ -221,9 +243,9 @@
                             Continue
                         }
 
-                        Set-VTDuplicateVMOnOff -Name $VsbJobName -vLabName $VirtualLabName -State 'Off' -Verbose
+                        Set-VTDuplicateVMOnOff -Name $VsbJobName -vLabName $VirtualLabName @StateOff
                         $VsbJob | Start-VSBJob -ErrorAction SilentlyContinue
-                        Set-VTDuplicateVMOnOff -Name $VsbJobName -vLabName $VirtualLabName -State 'On' -Verbose
+                        Set-VTDuplicateVMOnOff -Name $VsbJobName -vLabName $VirtualLabName @StateOn
                     }
                     If ($vsbOnHoldJobs) {
                         Start-Sleep -Seconds 600
@@ -231,7 +253,6 @@
                 } While ($vsbOnHoldJobs)
             }
             #endregion
-
         } Else {
             $Msg = "No jobs for vLab:$VirtualLabName vLabID:$VirtualLabId"
             "[$ProcessName] [$((Get-Date).ToString())] [Info] $Msg" | Out-File -FilePath $Log -Append
