@@ -5,7 +5,7 @@
 PSVeeamTools
 =============
 
-PowerShell module with basic Tools for Veeam B&R mgmt
+PowerShell module with basic Tools for Veeam Backup & Replication management
 
 This is a PowerShell module with a variety of functions usefull in a day-to-day tasks.
 
